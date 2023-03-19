@@ -7,19 +7,24 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"time"
 
 	"github.com/Bonifaceebuka/golang_todo_rest_api/models"
+	"github.com/gorilla/mux"
 	"github.com/joho/godotenv"
+	"go.mongodb.org/mongo-driver/bson"
+	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
 	"go.mongodb.org/mongo-driver/mongo/readpref"
 )
 
 var collection *mongo.Collection
+var TaskModel []models.Todo
 
 func init() {
 	LoadEnv()
-	createDBInstance()
+	collection = createDBInstance()
 }
 
 func LoadEnv() {
@@ -59,14 +64,14 @@ func Home(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 
 	w.WriteHeader(http.StatusOK)
-	strB, _ := json.Marshal("API service is fully up!")
-	w.Write(strB)
-	fmt.Println(string(strB))
+	resrponse, _ := json.Marshal("API service is fully up!")
+	w.Write(resrponse)
+	fmt.Println(string(resrponse))
 }
 
 func StoreTodo(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Access-Control-Allow-Origin", "*")
-	w.Header().Set("Access-Control-Allow-METHODS", "POST")
+	w.Header().Set("Access-Control-Allow-Methods", "POST")
 	w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
 	w.Header().Set("Content-Type", "application/x-www-form-urlencoded")
 	r.ParseForm()
@@ -76,8 +81,7 @@ func StoreTodo(w http.ResponseWriter, r *http.Request) {
 	fmt.Println(r.FormValue("task"))
 
 	todo.Task = r.FormValue("task")
-	coll := createDBInstance()
-	results, err := coll.InsertOne(context.TODO(), todo)
+	results, err := collection.InsertOne(context.TODO(), todo)
 
 	fmt.Println(results)
 	if err != nil {
@@ -85,7 +89,60 @@ func StoreTodo(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.WriteHeader(http.StatusCreated)
-	strB, _ := json.Marshal("Todo task added successfully!")
-	w.Write(strB)
-	fmt.Println(string(strB))
+	resrponse, _ := json.Marshal("Todo task added successfully!")
+	w.Write(resrponse)
+	fmt.Println(string(resrponse))
+}
+
+func GetAllTodos(res http.ResponseWriter, req *http.Request) {
+	res.Header().Set("Content-Type", "application/json")
+	res.Header().Set("Access-Control-Allow", "*")
+	res.Header().Set("Access-Control-Allow-Methods", "GET")
+
+	tasks := getTodos()
+	json.NewEncoder(res).Encode(tasks)
+}
+
+func getTodos() []primitive.M {
+	data, err := collection.Find(context.Background(), bson.D{{}})
+
+	if err != nil {
+		log.Fatal("Unable to fetch the tasks")
+	}
+
+	var allTasks []primitive.M
+	for data.Next(context.Background()) {
+		var result bson.M
+		err := data.Decode(&result)
+
+		if err != nil {
+			log.Fatal("Unable to decode this data")
+		}
+
+		allTasks = append(allTasks, result)
+
+	}
+	data.Close(context.Background())
+	return allTasks
+}
+
+func GetTask(res http.ResponseWriter, req *http.Request) {
+	res.Header().Set("Access-Control-Allow-Methods", "GET")
+	res.Header().Set("Access-Control-Allow-Orign", "*")
+	res.Header().Set("Access-Control-Allow-Type", "application/json")
+
+	vars := mux.Vars(req)
+	task_id := vars["task_id"]
+
+	id, _ := primitive.ObjectIDFromHex(task_id)
+	var ctx, cancel = context.WithTimeout(context.Background(), 100*time.Second)
+
+	foundTask, err := collection.FindOne(ctx, bson.M{"_id": id}).DecodeBytes()
+
+	defer cancel()
+	if err != nil {
+		log.Fatal("Unable to fetch the data for task")
+	}
+
+	fmt.Println(foundTask)
 }
