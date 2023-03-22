@@ -78,7 +78,6 @@ func StoreTodo(w http.ResponseWriter, r *http.Request) {
 	// r.ParseMultipartForm()
 	var todo models.Todo
 	json.NewDecoder(r.Body).Decode(&todo)
-	fmt.Println(r.FormValue("task"))
 
 	todo.Task = r.FormValue("task")
 	results, err := collection.InsertOne(context.TODO(), todo)
@@ -145,4 +144,69 @@ func GetTask(res http.ResponseWriter, req *http.Request) {
 	}
 
 	fmt.Println(foundTask)
+}
+
+func UpdateTask(res http.ResponseWriter, req *http.Request) {
+	res.Header().Set("Access-Control-Allow-Methods", "PUT")
+	res.Header().Set("Access-Control-Allow-Orign", "*")
+	res.Header().Set("Access-Control-Allow-Type", "application/json")
+
+	vars := mux.Vars(req)
+	task_id := vars["task_id"]
+
+	id, _ := primitive.ObjectIDFromHex(task_id)
+	var ctx, cancel = context.WithTimeout(context.Background(), 100*time.Second)
+
+	foundTask, err := collection.FindOne(ctx, bson.M{"_id": id}).DecodeBytes()
+
+	defer cancel()
+	if err != nil {
+		log.Fatal("Unable to fetch the data for task")
+	}
+	if foundTask == nil {
+		log.Fatal("Task not found")
+	}
+
+	req.ParseForm()
+	task := req.FormValue("task")
+	status := req.FormValue("status")
+
+	updatedTask, err := collection.UpdateOne(ctx, bson.M{"_id": id},
+		bson.M{"$set": bson.M{"status": status, "task": task}})
+
+	if err != nil {
+		panic("Task was not updated")
+	}
+
+	fmt.Println(updatedTask)
+}
+
+func DeleteTask(res http.ResponseWriter, req *http.Request) {
+	res.Header().Set("Access-Control-Allow-Methods", "DELETE")
+	res.Header().Set("Access-Control-Allow-Orign", "*")
+	res.Header().Set("Access-Control-Allow-Type", "application/json")
+
+	vars := mux.Vars(req)
+	task_id := vars["task_id"]
+
+	id, _ := primitive.ObjectIDFromHex(task_id)
+	var ctx, cancel = context.WithTimeout(context.Background(), 100*time.Second)
+
+	foundTask, err := collection.FindOne(ctx, bson.M{"_id": id}).DecodeBytes()
+
+	defer cancel()
+	if err != nil {
+		log.Fatal("Unable to fetch the data for task")
+	}
+	if foundTask == nil {
+		log.Fatal("Task not found")
+	}
+
+	taskToDelete, err := collection.DeleteOne(ctx, bson.M{"_id": id})
+
+	if err != nil {
+		panic("Task was not updated")
+	}
+
+	fmt.Println("Task deleted", taskToDelete)
 }
